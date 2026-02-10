@@ -30,14 +30,46 @@ The easiest way to deploy this full-stack Next.js + Socket.IO application is usi
     -   Railway will build your app and start the server.
     -   Once deployed, open the URL provided by Railway.
 
-## Option 2: Render
+## Option 2: Render (Has Free Tier)
 
-1.  Create a new **Web Service** on Render connected to your GitHub repo.
-2.  **Build Command:** `npm install && npm run build`
-3.  **Start Command:** `npm run start:prod`
-4.  **Environment Variables:**
+Render offers a **Free** instance type for Web Services.
+*Limitation: It "spins down" (sleeps) after 15 minutes of inactivity. When a new user joins, it might take 50 seconds to wake up.*
+
+1.  Create a new **Web Service** on Render.
+2.  Connect your GitHub repo.
+3.  **Instance Type:** Select "Free".
+4.  **Build Command:** `npm install && npm run build`
+5.  **Start Command:** `npm run start:prod`
+6.  **Environment Variables:**
     -   `NEXT_PUBLIC_SOCKET_URL`: Your Render URL (e.g., `https://wordoff.onrender.com`)
     -   `SUPABASE_URL` & `SUPABASE_ANON_KEY`.
+
+## Option 3: Split Hosting (Vercel + Render)
+
+**Best for:** Free Tier usage. Vercel hosts the site (Frontend), Render hosts the game server (Backend).
+
+### Part A: Backend (Render)
+1.  Create a new **Web Service** on Render.
+2.  Connect your GitHub repo.
+3.  **Instance Type:** "Free".
+4.  **Build Command:** `npm install`
+5.  **Start Command:** `npm run start:glitch`
+    *   *Note: This runs the lightweight standalone server (`server/standalone.ts`) specifically for this backend-only role.*
+6.  **Environment Variables:**
+    -   `PORT`: `10000` (Render default)
+    -   `SUPABASE_URL` & `SUPABASE_ANON_KEY`
+
+### Part B: Frontend (Vercel)
+1.  Import your GitHub repo to Vercel.
+2.  Vercel will auto-detect Next.js settings.
+3.  **Environment Variables:**
+    -   `NEXT_PUBLIC_SOCKET_URL`: Your Render URL (e.g., `https://word-off.onrender.com`)
+    -   `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase URL
+    -   `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase Key
+4.  **Deploy.**
+
+### Special Note on Render Free Tier
+The Render server will "sleep" after 15 minutes of inactivity. The first time you connect after a break, it may take ~50 seconds to wake up. This is normal for the free tier.
 
 ## Local Testing
 

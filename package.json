@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "start:prod": "NODE_ENV=production ts-node server/index.ts",
+    "start:glitch": "ts-node server/standalone.ts",
     "dev:server": "ts-node server/index.ts",
     "lint": "eslint"
   },
