@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WordOff Duel</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app match-layout">
+      <header class="hero">
+        <div class="brand">
+          <div class="logo">WO</div>
+          <div>
+            <p class="eyebrow">Ranked Duel</p>
+            <h1>Rapid Fire</h1>
+          </div>
+        </div>
+        <div class="meta">
+          <div class="pill">
+            <span class="label">Time</span>
+            <span id="time-left" class="value">60</span>
+          </div>
+          <div class="pill">
+            <span class="label">Your Score</span>
+            <span id="score" class="value">0</span>
+          </div>
+          <div class="pill hidden" id="lobby-pill">
+            <span class="label">Lobby</span>
+            <span id="lobby-code-label" class="value">---</span>
+          </div>
+          <div class="pill">
+            <span class="label">Opponent Score</span>
+            <span id="opponent-score" class="value">0</span>
+          </div>
+          <div class="pill">
+            <span class="label">Opponent</span>
+            <span id="opponent-name" class="value">---</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="match-card">
+        <div>
+          <p class="label">Definition</p>
+          <p id="definition" class="definition-text">Loading match...</p>
+        </div>
+        <div>
+          <p class="label">Hint</p>
+          <p id="hint" class="hint-text">_ _ _ _ _</p>
+        </div>
+      </section>
+
+      <section class="controls">
+        <div class="attempts">
+          <p class="label">Attempts</p>
+          <div id="attempts" class="attempt-dots" aria-live="polite"></div>
+        </div>
+
+        <form id="guess-form" class="guess-form" autocomplete="off">
+          <input
+            id="guess-input"
+            type="text"
+            placeholder="Type your guess..."
+            spellcheck="false"
+            autocomplete="off"
+            aria-label="Guess the word"
+          />
+          <button id="submit-button" type="submit">Submit</button>
+        </form>
+      </section>
+
+      <section class="match-status">
+        <p id="status" class="status-text">Same words for both players. 60 seconds.</p>
+      </section>
+
+      <section class="actions">
+        <button id="leave-button" class="ghost" type="button">Leave Match</button>
+      </section>
+    </main>
+
+    <script src="data/words.js"></script>
+    <script src="match.js"></script>
+  </body>
+</html>
