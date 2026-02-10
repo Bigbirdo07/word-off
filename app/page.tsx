@@ -339,10 +339,31 @@ export default function Home() {
           <ul id="history-list" className="history-list" aria-live="polite"></ul>
         </section>
 
+        <section className="feedback-section">
+          <div className="feedback-card">
+            <div className="feedback-icon">💬</div>
+            <h2 className="feedback-title">We Want to Hear From You!</h2>
+            <p className="feedback-message">
+              Provide us feedback on what you want to see! Our hope is to give back to the
+              community and provide a fun and interesting way to learn words and enforce learning.
+              We want to host tournaments of various ranks. Thank you so much and don&apos;t be
+              scared to reach out!
+            </p>
+            <a href="mailto:wordoffoffical@gmail.com" className="feedback-email-link">
+              <span className="feedback-email-icon">✉️</span>
+              wordoffoffical@gmail.com
+            </a>
+            <div className="feedback-tags">
+              <span className="feedback-tag">🏆 Tournaments Coming Soon</span>
+              <span className="feedback-tag">📚 Learn New Words</span>
+              <span className="feedback-tag">🤝 Community Driven</span>
+            </div>
+          </div>
+        </section>
+
         <footer className="footer">
           <p>
-            Offline-ready word game. Swap the word list in{" "}
-            <span className="chip">data/words.js</span>.
+            Made with ❤️ by the WordOff team.
           </p>
         </footer>
       </section>
