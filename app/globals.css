@@ -775,3 +775,40 @@ button.secondary:hover {
   border-radius: 999px;
   white-space: nowrap;
 }
+/* ─── Ko-fi Donation Button ─── */
+
+.kofi-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  padding: 12px 24px;
+  border-radius: 999px;
+  border: 2px solid rgba(31, 28, 25, 0.15);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  margin-bottom: 20px;
+}
+
+.kofi-button:hover {
+  background: #ff5e5b;
+  color: #fff;
+  border-color: #ff5e5b;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 94, 91, 0.3);
+}
+
+/* ─── Ad Container ─── */
+
+.ad-container {
+  margin: 16px 0;
+  padding: 8px 0;
+  text-align: center;
+  min-height: 50px;
+  border-radius: 8px;
+  overflow: hidden;
+}

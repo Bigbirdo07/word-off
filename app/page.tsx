@@ -353,6 +353,14 @@ export default function Home() {
               <span className="feedback-email-icon">✉️</span>
               wordoffoffical@gmail.com
             </a>
+            <a
+              href="https://ko-fi.com/wordoff"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="kofi-button"
+            >
+              ☕ Buy Us a Coffee
+            </a>
             <div className="feedback-tags">
               <span className="feedback-tag">🏆 Tournaments Coming Soon</span>
               <span className="feedback-tag">📚 Learn New Words</span>
@@ -360,6 +368,18 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        {/* Ad placement — non-intrusive, below content */}
+        <div className="ad-container">
+          <ins
+            className="adsbygoogle"
+            style={{ display: "block" }}
+            data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+            data-ad-slot="XXXXXXXXXX"
+            data-ad-format="horizontal"
+            data-full-width-responsive="true"
+          />
+        </div>
 
         <footer className="footer">
           <p>
