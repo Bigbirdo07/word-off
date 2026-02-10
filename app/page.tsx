@@ -354,12 +354,12 @@ export default function Home() {
               wordoffoffical@gmail.com
             </a>
             <a
-              href="https://ko-fi.com/wordoff"
+              href="https://buymeacoffee.com/wordoff"
               target="_blank"
               rel="noopener noreferrer"
               className="kofi-button"
             >
-              ☕ Buy Us a Coffee
+              ☕ Buy Me a Coffee
             </a>
             <div className="feedback-tags">
               <span className="feedback-tag">🏆 Tournaments Coming Soon</span>
