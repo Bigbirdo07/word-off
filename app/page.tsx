@@ -354,7 +354,7 @@ export default function Home() {
               wordoffoffical@gmail.com
             </a>
             <a
-              href="https://buymeacoffee.com/wordoff"
+              href="https://buymeacoffee.com/wordoffoffical"
               target="_blank"
               rel="noopener noreferrer"
               className="kofi-button"
