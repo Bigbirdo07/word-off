@@ -223,8 +223,7 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
 
             const { error: updateError } = await supabase.from("players").update({
                 rank_points: newRp,
-                rank_tier: rankInfo.tier,
-                words_solved: (player.words_solved || 0) + latestIndex
+                rank_tier: rankInfo.tier
             }).eq("id", player.id);
 
             if (updateError) {
