@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import io from "socket.io-client";
-// import type { Socket } from "socket.io-client"; // Disabled
 import { Player } from "./useAuth";
 
 export type MatchStatus = "idle" | "searching" | "found" | "playing";
@@ -29,16 +28,16 @@ export function useMatchmaking(player: Player | null) {
 
         newSocket.on("match_init", (data: any) => {
             console.log("Match found!", data);
-            setMatchData(data);
+            setMatchData((prev: any) => ({ ...prev, ...data }));
             setStatus("found");
-            setTimeout(() => setStatus("playing"), 1000);
+            setTimeout(() => setStatus("playing"), 500);
         });
 
-        // Add listener for Sprint Mode (which sends match_start directly)
         newSocket.on("match_start", (data: any) => {
-            console.log("Sprint/Match Started!", data);
-            setMatchData(data);
-            setStatus("playing");
+            console.log("Match Started!", data);
+            setMatchData((prev: any) => prev ? { ...prev, ...data } : data);
+            // If we're still idle (sprint mode), go straight to playing
+            setStatus((prevStatus) => prevStatus === "idle" ? "playing" : prevStatus);
         });
 
         return () => {
@@ -60,7 +59,6 @@ export function useMatchmaking(player: Player | null) {
 
     const startSprint = () => {
         if (!socket) return;
-        // If not logged in, send guest data
         const p = player || { username: "Guest", id: "guest", rank_tier: "Unranked", rank_points: 0 };
         socket.emit("start_sprint", p);
     };

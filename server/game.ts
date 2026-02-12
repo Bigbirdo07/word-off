@@ -1,13 +1,16 @@
 // @ts-nocheck
 class Game {
-    constructor(id, players, words) {
+    constructor(id, players, words, duration = 60) {
         this.id = id;
         this.players = players; // array of { socketId, player }
         this.words = words; // array of WordEntry
+        this.duration = duration; // seconds
         this.startTime = Date.now();
+        this.endTime = this.startTime + (duration * 1000);
         this.scores = {}; // socketId -> score
         this.progress = {}; // socketId -> wordIndex
         this.finished = {}; // socketId -> boolean
+        this.gameOver = false;
 
         players.forEach(p => {
             this.scores[p.socketId] = 0;
@@ -16,9 +19,15 @@ class Game {
         });
     }
 
+    isFinished() {
+        return this.gameOver || Date.now() >= this.endTime;
+    }
+
     processGuess(socketId, guess) {
+        if (this.isFinished()) return { correct: false, gameOver: true };
+
         const currentIndex = this.progress[socketId];
-        if (currentIndex >= this.words.length) return false;
+        if (currentIndex >= this.words.length) return { correct: false };
 
         const targetWord = this.words[currentIndex].word.toLowerCase();
 
@@ -26,12 +35,79 @@ class Game {
             this.scores[socketId] += 10; // 10 points per word
             this.progress[socketId] += 1;
 
-            // Bonus for speed? (Later)
-
-            return { correct: true, score: this.scores[socketId], nextIndex: this.progress[socketId] };
+            return {
+                correct: true,
+                score: this.scores[socketId],
+                nextIndex: this.progress[socketId],
+                wordsCorrect: this.progress[socketId]
+            };
         }
 
         return { correct: false };
+    }
+
+    // Mark a specific player as done (e.g. time ran out on their client)
+    playerFinished(socketId) {
+        this.finished[socketId] = true;
+        // Check if all players are done
+        const allDone = this.players.every(p => this.finished[p.socketId]);
+        if (allDone) {
+            this.gameOver = true;
+        }
+        return allDone;
+    }
+
+    endGame() {
+        this.gameOver = true;
+    }
+
+    getResults() {
+        const playerResults = this.players.map(p => ({
+            socketId: p.socketId,
+            username: p.player.username,
+            playerId: p.player.id,
+            score: this.scores[p.socketId],
+            wordsCorrect: this.progress[p.socketId]
+        }));
+
+        // Sort by score descending
+        playerResults.sort((a, b) => b.score - a.score);
+
+        // Determine winner (only for 2-player games)
+        let winner = null;
+        let isDraw = false;
+
+        if (playerResults.length >= 2) {
+            if (playerResults[0].score > playerResults[1].score) {
+                winner = playerResults[0].socketId;
+            } else if (playerResults[0].score === playerResults[1].score) {
+                isDraw = true;
+            }
+        }
+
+        // Calculate RP changes
+        const rpChanges = {};
+        playerResults.forEach(p => {
+            if (this.players.length === 1) {
+                // Single player (sprint) — small practice reward
+                rpChanges[p.socketId] = 5;
+            } else if (isDraw) {
+                rpChanges[p.socketId] = 5;
+            } else if (p.socketId === winner) {
+                rpChanges[p.socketId] = 25;
+            } else {
+                rpChanges[p.socketId] = -10;
+            }
+        });
+
+        return {
+            gameId: this.id,
+            players: playerResults,
+            winner: winner,
+            isDraw: isDraw,
+            rpChanges: rpChanges,
+            duration: this.duration
+        };
     }
 
     getState() {
@@ -39,7 +115,7 @@ class Game {
             id: this.id,
             scores: this.scores,
             progress: this.progress,
-            timeLeft: Math.max(0, 60 - (Date.now() - this.startTime) / 1000)
+            timeLeft: Math.max(0, (this.endTime - Date.now()) / 1000)
         };
     }
 }

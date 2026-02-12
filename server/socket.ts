@@ -7,6 +7,36 @@ const { Game } = require('./game');
 const dictionary = Dictionary.getInstance();
 const matchmaker = new Matchmaker();
 const games = {}; // roomId -> Game
+const gameTimers = {}; // roomId -> setTimeout handle
+
+function endGame(io, roomId) {
+    const game = games[roomId];
+    if (!game) return;
+
+    game.endGame();
+    const results = game.getResults();
+
+    console.log(`Game ended: ${roomId}`);
+    console.log(`  Results:`, JSON.stringify(results.players.map(p => ({
+        name: p.username, score: p.score, words: p.wordsCorrect
+    }))));
+    if (results.isDraw) {
+        console.log(`  Result: DRAW`);
+    } else {
+        const winner = results.players.find(p => p.socketId === results.winner);
+        console.log(`  Winner: ${winner?.username}`);
+    }
+
+    // Emit results to all players in the room
+    io.to(roomId).emit('match_result', results);
+
+    // Cleanup
+    delete games[roomId];
+    if (gameTimers[roomId]) {
+        clearTimeout(gameTimers[roomId]);
+        delete gameTimers[roomId];
+    }
+}
 
 function setupSocket(io) {
     io.on('connection', (socket) => {
@@ -20,14 +50,13 @@ function setupSocket(io) {
 
         // --- Matchmaking ---
         socket.on('join_queue', (playerData) => {
-            // console.log("Player joining queue:", playerData);
             const match = matchmaker.addPlayer(socket.id, playerData);
 
             if (match) {
                 // Match Found! Create Game
                 console.log(`Match found: ${match.id}`);
-                const words = dictionary.getRandomWords(110); // user requested 110 words
-                const game = new Game(match.id, match.players, words);
+                const words = dictionary.getRandomWords(110);
+                const game = new Game(match.id, match.players, words, 60);
                 games[match.id] = game;
 
                 const p1Socket = match.players[0].socketId;
@@ -37,25 +66,31 @@ function setupSocket(io) {
                 io.in(p1Socket).socketsJoin(match.id);
                 io.in(p2Socket).socketsJoin(match.id);
 
-                // Notify start
+                // Send shared match data to both players (no functions — only serializable data)
                 io.to(match.id).emit('match_start', {
                     roomId: match.id,
-                    words: words, // Send full list so client can pre-fetch definitions? No, send definitions.
-                    startTime: game.startTime + 5000,
-                    opponent: (socketId) => {
-                        return match.players.find(p => p.socketId !== socketId)?.player;
-                    }
+                    words: words,
+                    startTime: Date.now() + 5000 // 5 second countdown
                 });
 
-                // Send specific opponent info to each player
+                // Send per-player opponent info
                 io.to(p1Socket).emit('match_init', {
+                    roomId: match.id,
                     opponent: match.players[1].player,
-                    startTime: game.startTime + 5000
+                    startTime: Date.now() + 5000
                 });
                 io.to(p2Socket).emit('match_init', {
+                    roomId: match.id,
                     opponent: match.players[0].player,
-                    startTime: game.startTime + 5000
+                    startTime: Date.now() + 5000
                 });
+
+                // Server-side game timer: end the game after 60s + 5s countdown buffer + 2s grace
+                gameTimers[match.id] = setTimeout(() => {
+                    endGame(io, match.id);
+                }, 67000); // 5s countdown + 60s game + 2s grace
+
+                console.log(`Game ${match.id} will end in 67 seconds.`);
 
             } else {
                 socket.emit('queue_update', { status: 'searching' });
@@ -76,7 +111,7 @@ function setupSocket(io) {
             const player = playerData || { username: "Guest", id: "guest" };
             const players = [{ socketId: socket.id, player }];
 
-            const game = new Game(roomId, players, words);
+            const game = new Game(roomId, players, words, 60);
             games[roomId] = game;
 
             socket.join(roomId);
@@ -84,14 +119,19 @@ function setupSocket(io) {
             socket.emit('match_start', {
                 roomId: roomId,
                 words: words,
-                startTime: game.startTime + 1000, // Start sooner for single player
-                opponent: null // No opponent
+                startTime: Date.now() + 1000, // Start sooner for single player
+                opponent: null
             });
+
+            // Server-side timer for sprint too
+            gameTimers[roomId] = setTimeout(() => {
+                endGame(io, roomId);
+            }, 62000); // 1s + 60s + 1s grace
         });
 
         // --- Daily Challenge ---
         socket.on('get_daily', () => {
-            const date = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
+            const date = new Date().toISOString().split('T')[0];
             const words = dictionary.getDailyWords(date, 3);
 
             socket.emit('daily_puzzle', {
@@ -104,22 +144,48 @@ function setupSocket(io) {
         socket.on('submit_guess', ({ roomId, guess }) => {
             const game = games[roomId];
             if (!game) return;
+            if (game.isFinished()) return;
 
             const result = game.processGuess(socket.id, guess);
             if (result && result.correct) {
-                // Emit update to room
+                // Emit update to room (both players see each other's progress)
                 io.to(roomId).emit('score_update', {
                     socketId: socket.id,
                     score: result.score,
-                    progress: result.nextIndex // optional
+                    wordsCorrect: result.wordsCorrect,
+                    progress: result.nextIndex
                 });
+            }
+        });
+
+        // --- Player signals their timer ended ---
+        socket.on('player_finished', ({ roomId }) => {
+            const game = games[roomId];
+            if (!game) return;
+
+            const allDone = game.playerFinished(socket.id);
+            if (allDone) {
+                // All players done, end game immediately
+                endGame(io, roomId);
             }
         });
 
         socket.on('disconnect', () => {
             console.log('User disconnected:', socket.id);
             matchmaker.removePlayer(socket.id);
-            // Handle game forfeit if in game? later.
+
+            // Handle active game forfeit
+            for (const roomId in games) {
+                const game = games[roomId];
+                const isInGame = game.players.some(p => p.socketId === socket.id);
+                if (isInGame && !game.isFinished() && game.players.length > 1) {
+                    console.log(`Player ${socket.id} disconnected during game ${roomId}. Forfeiting.`);
+                    // Set their score to 0 (forfeit penalty)
+                    game.scores[socket.id] = 0;
+                    endGame(io, roomId);
+                    break;
+                }
+            }
         });
     });
 }

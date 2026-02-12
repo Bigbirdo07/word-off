@@ -19,10 +19,10 @@ export default function Home() {
   const [mode, setMode] = useState<Mode>("sprint");
   const [view, setView] = useState<"home" | "daily" | "leaderboard" | "profile">("home");
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
-  const { player, login, register, refreshPlayer } = useAuth();
+  const { player, login, register, logout, refreshPlayer } = useAuth();
 
   // Matchmaking Hook
-  const { status: matchStatus, matchData: socketMatchData, joinQueue, socket } = useMatchmaking(player);
+  const { status: matchStatus, matchData: socketMatchData, joinQueue, leaveQueue, socket } = useMatchmaking(player);
 
   // Local Match State
   const [localMatchData, setLocalMatchData] = useState<any>(null);
@@ -81,8 +81,9 @@ export default function Home() {
       <MatchView
         socket={socket}
         matchData={socketMatchData}
-        onExit={() => window.location.reload()} // Simple exit for now
+        onExit={() => window.location.reload()}
         player={player}
+        onUpdatePlayer={refreshPlayer}
       />
     );
   }
@@ -124,6 +125,7 @@ export default function Home() {
         setView={setView}
         player={player}
         onOpenAuth={() => setAuthModalOpen(true)}
+        onLogout={logout}
       />
 
       <section className="main-panel">
@@ -235,7 +237,8 @@ export default function Home() {
                   id="ranked-cancel"
                   className="ghost"
                   type="button"
-                  disabled
+                  disabled={matchStatus !== "searching"}
+                  onClick={leaveQueue}
                 >
                   Cancel Queue
                 </button>

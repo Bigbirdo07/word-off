@@ -12,9 +12,10 @@ interface SidebarProps {
     setView: (view: "home" | "daily" | "leaderboard" | "profile") => void;
     player: Player | null;
     onOpenAuth: () => void;
+    onLogout?: () => void;
 }
 
-export function Sidebar({ mode, setMode, view, setView, player, onOpenAuth }: SidebarProps) {
+export function Sidebar({ mode, setMode, view, setView, player, onOpenAuth, onLogout }: SidebarProps) {
     return (
         <aside className="sidebar">
             <div className="sidebar-card">
@@ -73,7 +74,7 @@ export function Sidebar({ mode, setMode, view, setView, player, onOpenAuth }: Si
                     <div
                         className="rank-meter-bar"
                         id="rank-meter-bar"
-                        style={{ width: "10%" }} // Dynamic width todo
+                        style={{ width: `${player ? Math.max(2, player.rank_points % 100) : 0}%` }}
                     ></div>
                 </div>
                 <div className="rank-meta">
@@ -97,6 +98,16 @@ export function Sidebar({ mode, setMode, view, setView, player, onOpenAuth }: Si
                 ) : (
                     <div className="profile-actions">
                         <p className="sidebar-note">Logged in as {player.username}</p>
+                        {onLogout && (
+                            <button
+                                className="ghost"
+                                type="button"
+                                onClick={onLogout}
+                                style={{ marginTop: "8px", fontSize: "13px" }}
+                            >
+                                Logout
+                            </button>
+                        )}
                     </div>
                 )}
 
