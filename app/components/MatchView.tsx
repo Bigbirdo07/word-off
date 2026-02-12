@@ -23,6 +23,7 @@ interface MatchResult {
 }
 
 export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }: MatchViewProps) {
+    // Game state
     const [words, setWords] = useState<any[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [input, setInput] = useState("");
@@ -33,53 +34,43 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
     const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
     const [opponentName, setOpponentName] = useState("Opponent");
     const [roomId, setRoomId] = useState<string | null>(null);
+    const [message, setMessage] = useState("");
 
+    // Hint state (like Sprint)
+    const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set());
+    const [hintsUsed, setHintsUsed] = useState(0);
+    const MAX_HINTS = 3;
+
+    // Refs
     const timerRef = useRef<NodeJS.Timeout | null>(null);
-
+    const hintTimerRef = useRef<NodeJS.Timeout | null>(null);
     const inputRef = useRef<HTMLInputElement | null>(null);
-    const resultSavedRef = useRef(false);
     const gameStartedRef = useRef(false);
-
-    // Refs to avoid stale closures in saveResult and startTimer
-    const scoreRef = useRef(0);
-    const currentIndexRef = useRef(0);
+    const resultSavedRef = useRef(false);
     const roomIdRef = useRef<string | null>(null);
 
-    // Keep refs in sync with state
-    useEffect(() => { scoreRef.current = score; }, [score]);
-    useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
+    // Keep roomId ref in sync for timer closure
     useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
 
-    // Initialize words from matchData if already available
-    // This handles the race condition where match_start fires before MatchView mounts
+    // ── Initialize from matchData (handles race condition) ──
     useEffect(() => {
-        if (matchData?.words) {
-            setWords(matchData.words);
-        }
-        if (matchData?.opponent) {
-            setOpponentName(matchData.opponent.username || "Opponent");
-        }
-        if (matchData?.roomId) {
-            setRoomId(matchData.roomId);
-        }
-        // If matchData already has words, the match_start event already fired
-        // before this component mounted — start game now
+        if (matchData?.words) setWords(matchData.words);
+        if (matchData?.opponent) setOpponentName(matchData.opponent.username || "Opponent");
+        if (matchData?.roomId) setRoomId(matchData.roomId);
         if (matchData?.words?.length > 0 && !gameStartedRef.current) {
             gameStartedRef.current = true;
             startGame();
         }
     }, [matchData]);
 
-    // Socket event listeners
+    // ── Socket events ──
     useEffect(() => {
         if (!socket) {
-            // Offline/sprint fallback
             startGame();
             return;
         }
 
         socket.on("match_start", (data: any) => {
-            console.log("Match Start Data:", data);
             setWords(data.words);
             setRoomId(data.roomId);
             if (!gameStartedRef.current) {
@@ -89,13 +80,8 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
         });
 
         socket.on("match_init", (data: any) => {
-            console.log("Match Init:", data);
-            if (data.opponent) {
-                setOpponentName(data.opponent.username || "Opponent");
-            }
-            if (data.roomId) {
-                setRoomId(data.roomId);
-            }
+            if (data.opponent) setOpponentName(data.opponent.username || "Opponent");
+            if (data.roomId) setRoomId(data.roomId);
         });
 
         socket.on("score_update", (data: any) => {
@@ -103,16 +89,29 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
                 setScore(data.score);
                 setCurrentIndex(data.wordsCorrect || data.progress || 0);
                 setInput("");
+                setMessage("Correct! ✓");
+                setTimeout(() => setMessage(""), 1000);
+                // Reset hints for new word
+                setRevealedIndices(new Set());
+                setHintsUsed(0);
             } else {
                 setOpponentScore(data.score);
             }
         });
 
-        socket.on("match_result", (data: MatchResult) => {
+        // ── MATCH RESULT: Save RP directly here ──
+        socket.on("match_result", async (data: MatchResult) => {
             console.log("Match Result from server:", data);
             setMatchResult(data);
             setGameState("finished");
             if (timerRef.current) clearInterval(timerRef.current);
+            if (hintTimerRef.current) clearInterval(hintTimerRef.current);
+
+            // Save RP immediately with fresh data from the event
+            if (player && !resultSavedRef.current) {
+                resultSavedRef.current = true;
+                await saveRP(data, socket.id);
+            }
         });
 
         return () => {
@@ -121,14 +120,67 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
             socket.off("score_update");
             socket.off("match_result");
             if (timerRef.current) clearInterval(timerRef.current);
-
+            if (hintTimerRef.current) clearInterval(hintTimerRef.current);
         };
-    }, [socket]);
+    }, [socket, player]);
 
+    // ── Save RP (fresh, simple, direct) ──
+    async function saveRP(result: MatchResult, mySocketId: string) {
+        if (!player) return;
+
+        const rpChange = result.rpChanges[mySocketId] || 0;
+        const newRp = Math.max(0, (player.rank_points || 0) + rpChange);
+        const rankInfo = getRankFromRP(newRp);
+
+        let outcome = "draw";
+        if (result.isDraw) {
+            outcome = "draw";
+        } else if (result.winner === mySocketId) {
+            outcome = "win";
+        } else {
+            outcome = "loss";
+        }
+
+        const myResult = result.players.find(p => p.socketId === mySocketId);
+        const finalScore = myResult?.score || 0;
+
+        console.log(`Saving RP: ${outcome} | rpChange: ${rpChange} | newRP: ${newRp} | tier: ${rankInfo.tier}`);
+
+        try {
+            // 1. Save match history
+            const { error: historyError } = await supabase.from("match_history").insert([{
+                player_id: player.id,
+                opponent_name: opponentName || "Unknown",
+                result: outcome,
+                score: finalScore,
+                rp_change: rpChange,
+                words_solved: []
+            }]);
+            if (historyError) console.error("Match history save failed:", historyError);
+
+            // 2. Update player rank_points and rank_tier
+            const { error: updateError } = await supabase.from("players").update({
+                rank_points: newRp,
+                rank_tier: rankInfo.tier
+            }).eq("id", player.id);
+
+            if (updateError) {
+                console.error("Player RP update failed:", updateError);
+            } else {
+                console.log("✅ RP saved successfully! New RP:", newRp, "Tier:", rankInfo.tier);
+            }
+
+            // 3. Refresh player in sidebar
+            if (onUpdatePlayer) onUpdatePlayer();
+        } catch (err) {
+            console.error("Save failed:", err);
+        }
+    }
+
+    // ── Game start ──
     function startGame() {
         setGameState("playing");
         startTimer();
-        // Focus the input
         setTimeout(() => inputRef.current?.focus(), 100);
     }
 
@@ -140,14 +192,10 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
             setTimeLeft((prev) => {
                 if (prev <= 1) {
                     clearInterval(timerRef.current!);
-                    // Signal server that our timer ended (use ref to avoid stale closure)
                     if (socket && roomIdRef.current) {
                         socket.emit("player_finished", { roomId: roomIdRef.current });
                     }
-                    // If no server (offline), end locally
-                    if (!socket) {
-                        setGameState("finished");
-                    }
+                    if (!socket) setGameState("finished");
                     return 0;
                 }
                 return prev - 1;
@@ -155,119 +203,128 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
         }, 1000);
     }
 
-    // Save result when game finishes with server results
+    // ── Auto-hint timer (reveal a letter every 7s) ──
     useEffect(() => {
-        if (gameState === "finished" && player && !resultSavedRef.current) {
-            resultSavedRef.current = true;
-            saveResult(matchResult);
-        }
-    }, [gameState, matchResult]);
+        if (gameState !== "playing" || words.length === 0) return;
 
-    async function saveResult(serverResult: MatchResult | null) {
-        if (!player) return;
+        // Reset hints for current word
+        setRevealedIndices(new Set());
+        setHintsUsed(0);
+        if (hintTimerRef.current) clearInterval(hintTimerRef.current);
 
-        // Read from refs to get the latest values (avoids stale closures)
-        const latestScore = scoreRef.current;
-        const latestIndex = currentIndexRef.current;
+        hintTimerRef.current = setInterval(() => {
+            setRevealedIndices(prev => {
+                const currentWord = words[currentIndex]?.word || "";
+                if (prev.size >= currentWord.length) return prev;
 
-        // Use server results if available, otherwise calculate locally
-        let result = "practice";
-        let rpChange = 0;
-        let finalScore = latestScore;
+                const next = new Set(prev);
+                if (!next.has(0)) {
+                    next.add(0);
+                } else {
+                    const unrevealed = Array.from({ length: currentWord.length }, (_, i) => i)
+                        .filter(i => !next.has(i));
+                    if (unrevealed.length > 0) {
+                        next.add(unrevealed[Math.floor(Math.random() * unrevealed.length)]);
+                    }
+                }
+                return next;
+            });
+        }, 7000);
 
-        if (serverResult) {
-            // Server-authoritative results
-            const myResult = serverResult.players.find(p => p.socketId === socket?.id);
-            if (myResult) finalScore = myResult.score;
-            rpChange = serverResult.rpChanges[socket?.id] || 0;
+        return () => {
+            if (hintTimerRef.current) clearInterval(hintTimerRef.current);
+        };
+    }, [currentIndex, words, gameState]);
 
-            if (serverResult.isDraw) {
-                result = "draw";
-            } else if (serverResult.winner === socket?.id) {
-                result = "win";
-            } else if (serverResult.players.length > 1) {
-                result = "loss";
+    // ── Current word helpers ──
+    const currentWordData = words[currentIndex];
+    const currentWord = currentWordData?.word || "";
+
+    const getHintDisplay = () => {
+        if (!currentWord) return "";
+        return currentWord.split("").map((char: string, i: number) => {
+            if (revealedIndices.has(i) || char === " ") return char;
+            return "_";
+        }).join(" ");
+    };
+
+    // ── Manual hint (reveal a letter, costs -1s) ──
+    const handleHint = () => {
+        if (gameState !== "playing" || !currentWord || hintsUsed >= MAX_HINTS) return;
+
+        setHintsUsed(prev => prev + 1);
+        setTimeLeft(prev => {
+            const newTime = prev - 1;
+            if (newTime <= 0) {
+                if (timerRef.current) clearInterval(timerRef.current);
+                if (socket && roomIdRef.current) {
+                    socket.emit("player_finished", { roomId: roomIdRef.current });
+                }
+                return 0;
             }
-        } else if (!matchData?.opponent) {
-            // Single player (Sprint) — no server result
-            result = "practice";
-            rpChange = 0;
-        }
+            return newTime;
+        });
 
-        console.log("saveResult called — score:", latestScore, "index:", latestIndex, "rpChange:", rpChange, "result:", result);
-
-        const solvedWords = words.slice(0, latestIndex).map((w: any) => w.word);
-
-        try {
-            // 1. Save Match History
-            const cleanWords = Array.isArray(solvedWords)
-                ? solvedWords.filter((w: any) => typeof w === "string" && w.length > 0)
-                : [];
-
-            const { error: historyError } = await supabase.from("match_history").insert([{
-                player_id: player.id,
-                opponent_name: opponentName || "Practice Bot",
-                result: result,
-                score: finalScore,
-                rp_change: rpChange,
-                words_solved: cleanWords
-            }]);
-
-            if (historyError) {
-                console.error("Failed to save match history:", historyError.message, historyError.details, historyError.hint);
+        setRevealedIndices(prev => {
+            if (prev.size >= currentWord.length) return prev;
+            const next = new Set(prev);
+            if (!next.has(0)) {
+                next.add(0);
+            } else {
+                const unrevealed = Array.from({ length: currentWord.length }, (_, i) => i)
+                    .filter(i => !next.has(i));
+                if (unrevealed.length > 0) {
+                    next.add(unrevealed[Math.floor(Math.random() * unrevealed.length)]);
+                }
             }
+            return next;
+        });
+    };
 
-            // 2. Update Player Rank, Tier & Words Solved
-            const newRp = Math.max(0, (player.rank_points || 0) + rpChange);
-            const rankInfo = getRankFromRP(newRp);
+    // ── Pass / Skip word ──
+    const handlePass = () => {
+        if (gameState !== "playing" || !currentWord) return;
+        setMessage(`Skipped! Word was "${currentWord}"`);
+        setInput("");
+        setRevealedIndices(new Set());
+        setHintsUsed(0);
+        setCurrentIndex(prev => prev + 1);
+        setTimeout(() => setMessage(""), 2000);
+    };
 
-            const { error: updateError } = await supabase.from("players").update({
-                rank_points: newRp,
-                rank_tier: rankInfo.tier
-            }).eq("id", player.id);
-
-            if (updateError) {
-                console.error("Failed to update player:", updateError.message, updateError.details, updateError.hint);
-            }
-
-            console.log("Match Saved!", result, rpChange, "New RP:", newRp, "Tier:", rankInfo.tier);
-
-            // 3. Refresh player state in parent
-            if (onUpdatePlayer) {
-                onUpdatePlayer();
-            }
-        } catch (err) {
-            console.error("Failed to save match:", err);
-        }
-    }
-
+    // ── Submit guess ──
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (gameState !== "playing" || !input.trim()) return;
 
-        // Online — send to server
-        if (socket && roomId) {
+        // Online — send to server for validation
+        if (socket && roomIdRef.current) {
             socket.emit("submit_guess", {
-                roomId: roomId,
+                roomId: roomIdRef.current,
                 guess: input.trim()
             });
-            // Don't clear input here — server will confirm via score_update
+            // Don't clear input — server confirms via score_update
             return;
         }
 
         // Offline fallback
-        const currentWord = words[currentIndex]?.word;
         if (currentWord && input.toLowerCase().trim() === currentWord.toLowerCase()) {
-            setScore(current => current + 10);
+            setScore(s => s + 10);
             setCurrentIndex(prev => prev + 1);
             setInput("");
+            setRevealedIndices(new Set());
+            setHintsUsed(0);
+        } else {
+            setMessage("Try again!");
+            setInput("");
+            setTimeout(() => setMessage(""), 1000);
         }
     };
 
-    // Derive result display info
+    // ── Result display ──
     const getResultDisplay = () => {
         if (!matchResult) {
-            return { title: "Time's Up!", subtitle: `Score: ${score}`, rpText: "+5 RP", color: "var(--accent)" };
+            return { title: "Time's Up!", subtitle: `Score: ${score}`, rpText: "+0 RP", color: "var(--accent)" };
         }
 
         const myRp = matchResult.rpChanges[socket?.id] || 0;
@@ -316,7 +373,6 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
                 </div>
             </header>
 
-
             {/* Playing State */}
             {gameState === "playing" && words.length > 0 && (
                 <>
@@ -328,10 +384,35 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
                             <p className="definition-text">
                                 {words[currentIndex]?.definition || "Loading..."}
                             </p>
+                            <p className="hint-text" style={{ marginTop: "12px", letterSpacing: "4px", fontFamily: "monospace", fontSize: "18px" }}>
+                                {getHintDisplay()}
+                            </p>
                         </div>
                     </section>
 
                     <section className="controls">
+                        <div className="attempts">
+                            <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginBottom: "12px" }}>
+                                <button
+                                    type="button"
+                                    className="hint-button"
+                                    onClick={handleHint}
+                                    disabled={hintsUsed >= MAX_HINTS}
+                                    style={{ opacity: hintsUsed >= MAX_HINTS ? 0.4 : 1 }}
+                                >
+                                    Hint ({MAX_HINTS - hintsUsed} left)
+                                </button>
+                                <button
+                                    type="button"
+                                    className="hint-button"
+                                    style={{ borderColor: 'var(--accent-deep)', color: 'var(--accent-deep)' }}
+                                    onClick={handlePass}
+                                >
+                                    Pass
+                                </button>
+                            </div>
+                        </div>
+
                         <form onSubmit={handleSubmit} className="guess-form" autoComplete="off">
                             <input
                                 ref={inputRef}
@@ -345,11 +426,12 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
                             />
                             <button type="submit">Submit</button>
                         </form>
+                        {message && <p className="status-text">{message}</p>}
                     </section>
 
                     <section className="status">
                         <p className="status-text">
-                            Words correct: {currentIndex} | Score: {score}
+                            Words correct: {score / 10} | Score: {score}
                             {isRanked && ` | ${opponentName}: ${opponentScore}`}
                         </p>
                     </section>
@@ -368,7 +450,7 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
                             {display.subtitle}
                         </p>
                         <p style={{ fontSize: "14px", opacity: 0.6, marginBottom: "4px" }}>
-                            Words Correct: {currentIndex}
+                            Words Correct: {score / 10}
                         </p>
                         {player && (
                             <p style={{
