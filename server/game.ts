@@ -94,7 +94,7 @@ class Game {
             } else if (isDraw) {
                 rpChanges[p.socketId] = 5;
             } else if (p.socketId === winner) {
-                rpChanges[p.socketId] = 25;
+                rpChanges[p.socketId] = Math.floor(Math.random() * 6) + 18; // 18-23 RP
             } else {
                 rpChanges[p.socketId] = -10;
             }
