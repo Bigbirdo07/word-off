@@ -40,6 +40,16 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
     const resultSavedRef = useRef(false);
     const gameStartedRef = useRef(false);
 
+    // Refs to avoid stale closures in saveResult and startTimer
+    const scoreRef = useRef(0);
+    const currentIndexRef = useRef(0);
+    const roomIdRef = useRef<string | null>(null);
+
+    // Keep refs in sync with state
+    useEffect(() => { scoreRef.current = score; }, [score]);
+    useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
+    useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
+
     // Initialize words from matchData if already available
     // This handles the race condition where match_start fires before MatchView mounts
     useEffect(() => {
@@ -130,9 +140,9 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
             setTimeLeft((prev) => {
                 if (prev <= 1) {
                     clearInterval(timerRef.current!);
-                    // Signal server that our timer ended
-                    if (socket && roomId) {
-                        socket.emit("player_finished", { roomId });
+                    // Signal server that our timer ended (use ref to avoid stale closure)
+                    if (socket && roomIdRef.current) {
+                        socket.emit("player_finished", { roomId: roomIdRef.current });
                     }
                     // If no server (offline), end locally
                     if (!socket) {
@@ -149,29 +159,33 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
     useEffect(() => {
         if (gameState === "finished" && player && !resultSavedRef.current) {
             resultSavedRef.current = true;
-            saveResult();
+            saveResult(matchResult);
         }
     }, [gameState, matchResult]);
 
-    async function saveResult() {
+    async function saveResult(serverResult: MatchResult | null) {
         if (!player) return;
+
+        // Read from refs to get the latest values (avoids stale closures)
+        const latestScore = scoreRef.current;
+        const latestIndex = currentIndexRef.current;
 
         // Use server results if available, otherwise calculate locally
         let result = "practice";
         let rpChange = 5;
-        let finalScore = score;
+        let finalScore = latestScore;
 
-        if (matchResult) {
+        if (serverResult) {
             // Server-authoritative results
-            const myResult = matchResult.players.find(p => p.socketId === socket?.id);
+            const myResult = serverResult.players.find(p => p.socketId === socket?.id);
             if (myResult) finalScore = myResult.score;
-            rpChange = matchResult.rpChanges[socket?.id] || 0;
+            rpChange = serverResult.rpChanges[socket?.id] || 0;
 
-            if (matchResult.isDraw) {
+            if (serverResult.isDraw) {
                 result = "draw";
-            } else if (matchResult.winner === socket?.id) {
+            } else if (serverResult.winner === socket?.id) {
                 result = "win";
-            } else if (matchResult.players.length > 1) {
+            } else if (serverResult.players.length > 1) {
                 result = "loss";
             }
         } else if (!matchData?.opponent) {
@@ -180,7 +194,9 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
             rpChange = 5;
         }
 
-        const solvedWords = words.slice(0, currentIndex).map((w: any) => w.word);
+        console.log("saveResult called — score:", latestScore, "index:", latestIndex, "rpChange:", rpChange, "result:", result);
+
+        const solvedWords = words.slice(0, latestIndex).map((w: any) => w.word);
 
         try {
             // 1. Save Match History
@@ -208,7 +224,7 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
             const { error: updateError } = await supabase.from("players").update({
                 rank_points: newRp,
                 rank_tier: rankInfo.tier,
-                words_solved: (player.words_solved || 0) + currentIndex
+                words_solved: (player.words_solved || 0) + latestIndex
             }).eq("id", player.id);
 
             if (updateError) {
