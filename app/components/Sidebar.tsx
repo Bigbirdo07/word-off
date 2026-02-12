@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Player } from "../hooks/useAuth";
+import { getRankFromRP } from "@/lib/ranks";
 
 type Mode = "sprint" | "ranked" | "daily" | "endless";
 
@@ -16,6 +17,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ mode, setMode, view, setView, player, onOpenAuth, onLogout }: SidebarProps) {
+    const rankInfo = player ? getRankFromRP(player.rank_points || 0) : null;
+
     return (
         <aside className="sidebar">
             <div className="sidebar-card">
@@ -68,19 +71,19 @@ export function Sidebar({ mode, setMode, view, setView, player, onOpenAuth, onLo
                     <span id="player-name">{player ? player.username : "Guest"}</span>
                 </p>
                 <p className="profile-tier">
-                    <span id="rank-tier">{player ? player.rank_tier : "No Rank"}</span>
+                    <span id="rank-tier">{rankInfo ? rankInfo.tier : "No Rank"}</span>
                 </p>
                 <div className="rank-meter">
                     <div
                         className="rank-meter-bar"
                         id="rank-meter-bar"
-                        style={{ width: `${player ? Math.max(2, player.rank_points % 100) : 0}%` }}
+                        style={{ width: `${rankInfo ? rankInfo.progressPercent : 0}%` }}
                     ></div>
                 </div>
                 <div className="rank-meta">
                     <span id="rank-points">{player ? player.rank_points : 0}</span>
                     <span> / </span>
-                    <span id="rank-division">100</span>
+                    <span id="rank-division">{rankInfo ? rankInfo.tierCeiling : 100}</span>
                     <span> RP</span>
                 </div>
 

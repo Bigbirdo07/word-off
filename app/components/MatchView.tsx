@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { getRankFromRP } from "@/lib/ranks";
 import { Player } from "../hooks/useAuth";
 
 interface MatchViewProps {
@@ -183,31 +184,38 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
 
         try {
             // 1. Save Match History
+            const cleanWords = Array.isArray(solvedWords)
+                ? solvedWords.filter((w: any) => typeof w === "string" && w.length > 0)
+                : [];
+
             const { error: historyError } = await supabase.from("match_history").insert([{
                 player_id: player.id,
                 opponent_name: opponentName || "Practice Bot",
                 result: result,
                 score: finalScore,
                 rp_change: rpChange,
-                words_solved: solvedWords
+                words_solved: cleanWords
             }]);
 
             if (historyError) {
-                console.error("Failed to save match history:", historyError.message, historyError.details);
+                console.error("Failed to save match history:", historyError.message, historyError.details, historyError.hint);
             }
 
-            // 2. Update Player Rank & Words Solved
+            // 2. Update Player Rank, Tier & Words Solved
             const newRp = Math.max(0, (player.rank_points || 0) + rpChange);
+            const rankInfo = getRankFromRP(newRp);
+
             const { error: updateError } = await supabase.from("players").update({
                 rank_points: newRp,
+                rank_tier: rankInfo.tier,
                 words_solved: (player.words_solved || 0) + currentIndex
             }).eq("id", player.id);
 
             if (updateError) {
-                console.error("Failed to update player:", updateError.message, updateError.details);
+                console.error("Failed to update player:", updateError.message, updateError.details, updateError.hint);
             }
 
-            console.log("Match Saved!", result, rpChange, "New RP:", newRp);
+            console.log("Match Saved!", result, rpChange, "New RP:", newRp, "Tier:", rankInfo.tier);
 
             // 3. Refresh player state in parent
             if (onUpdatePlayer) {
