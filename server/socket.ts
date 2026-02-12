@@ -70,27 +70,27 @@ function setupSocket(io) {
                 io.to(match.id).emit('match_start', {
                     roomId: match.id,
                     words: words,
-                    startTime: Date.now() + 5000 // 5 second countdown
+                    startTime: Date.now() // Start immediately
                 });
 
                 // Send per-player opponent info
                 io.to(p1Socket).emit('match_init', {
                     roomId: match.id,
                     opponent: match.players[1].player,
-                    startTime: Date.now() + 5000
+                    startTime: Date.now()
                 });
                 io.to(p2Socket).emit('match_init', {
                     roomId: match.id,
                     opponent: match.players[0].player,
-                    startTime: Date.now() + 5000
+                    startTime: Date.now()
                 });
 
-                // Server-side game timer: end the game after 60s + 5s countdown buffer + 2s grace
+                // Server-side game timer: end the game after 60s + 2s grace
                 gameTimers[match.id] = setTimeout(() => {
                     endGame(io, match.id);
-                }, 67000); // 5s countdown + 60s game + 2s grace
+                }, 62000); // 60s game + 2s grace
 
-                console.log(`Game ${match.id} will end in 67 seconds.`);
+                console.log(`Game ${match.id} will end in 62 seconds.`);
 
             } else {
                 socket.emit('queue_update', { status: 'searching' });

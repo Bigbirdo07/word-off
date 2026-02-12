@@ -28,18 +28,19 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
     const [score, setScore] = useState(0);
     const [opponentScore, setOpponentScore] = useState(0);
     const [timeLeft, setTimeLeft] = useState(60);
-    const [gameState, setGameState] = useState<"countdown" | "playing" | "finished">("countdown");
-    const [countdown, setCountdown] = useState(5);
+    const [gameState, setGameState] = useState<"playing" | "finished">("playing");
     const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
     const [opponentName, setOpponentName] = useState("Opponent");
     const [roomId, setRoomId] = useState<string | null>(null);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
-    const countdownRef = useRef<NodeJS.Timeout | null>(null);
+
     const inputRef = useRef<HTMLInputElement | null>(null);
     const resultSavedRef = useRef(false);
+    const gameStartedRef = useRef(false);
 
     // Initialize words from matchData if already available
+    // This handles the race condition where match_start fires before MatchView mounts
     useEffect(() => {
         if (matchData?.words) {
             setWords(matchData.words);
@@ -50,14 +51,19 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
         if (matchData?.roomId) {
             setRoomId(matchData.roomId);
         }
+        // If matchData already has words, the match_start event already fired
+        // before this component mounted — start game now
+        if (matchData?.words?.length > 0 && !gameStartedRef.current) {
+            gameStartedRef.current = true;
+            startGame();
+        }
     }, [matchData]);
 
     // Socket event listeners
     useEffect(() => {
         if (!socket) {
             // Offline/sprint fallback
-            setGameState("countdown");
-            startCountdown();
+            startGame();
             return;
         }
 
@@ -65,7 +71,10 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
             console.log("Match Start Data:", data);
             setWords(data.words);
             setRoomId(data.roomId);
-            startCountdown();
+            if (!gameStartedRef.current) {
+                gameStartedRef.current = true;
+                startGame();
+            }
         });
 
         socket.on("match_init", (data: any) => {
@@ -101,26 +110,15 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
             socket.off("score_update");
             socket.off("match_result");
             if (timerRef.current) clearInterval(timerRef.current);
-            if (countdownRef.current) clearInterval(countdownRef.current);
+
         };
     }, [socket]);
 
-    function startCountdown() {
-        setGameState("countdown");
-        setCountdown(5);
-
-        let count = 5;
-        countdownRef.current = setInterval(() => {
-            count -= 1;
-            setCountdown(count);
-            if (count <= 0) {
-                clearInterval(countdownRef.current!);
-                setGameState("playing");
-                startTimer();
-                // Focus the input
-                setTimeout(() => inputRef.current?.focus(), 100);
-            }
-        }, 1000);
+    function startGame() {
+        setGameState("playing");
+        startTimer();
+        // Focus the input
+        setTimeout(() => inputRef.current?.focus(), 100);
     }
 
     function startTimer() {
@@ -279,7 +277,7 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
                     <div className="pill">
                         <span className="label">Time</span>
                         <span className="value" style={{ color: timeLeft <= 10 ? "var(--accent-deep)" : "inherit" }}>
-                            {gameState === "countdown" ? "—" : timeLeft}
+                            {timeLeft}
                         </span>
                     </div>
                     <div className="pill">
@@ -295,23 +293,6 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
                 </div>
             </header>
 
-            {/* Countdown Overlay */}
-            {gameState === "countdown" && (
-                <div className="card" style={{ textAlign: "center", padding: "40px" }}>
-                    <p className="label">Get Ready!</p>
-                    <h2 style={{ fontSize: "72px", margin: "20px 0", color: "var(--accent)" }}>
-                        {countdown > 0 ? countdown : "GO!"}
-                    </h2>
-                    {isRanked && (
-                        <p style={{ fontSize: "18px", opacity: 0.7 }}>
-                            vs. <strong>{opponentName}</strong>
-                        </p>
-                    )}
-                    <p style={{ fontSize: "14px", opacity: 0.5, marginTop: "10px" }}>
-                        Read the definition. Type the word. Score points!
-                    </p>
-                </div>
-            )}
 
             {/* Playing State */}
             {gameState === "playing" && words.length > 0 && (
