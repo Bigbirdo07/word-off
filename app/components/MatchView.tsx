@@ -172,7 +172,7 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
 
         // Use server results if available, otherwise calculate locally
         let result = "practice";
-        let rpChange = 5;
+        let rpChange = 0;
         let finalScore = latestScore;
 
         if (serverResult) {
@@ -191,7 +191,7 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
         } else if (!matchData?.opponent) {
             // Single player (Sprint) — no server result
             result = "practice";
-            rpChange = 5;
+            rpChange = 0;
         }
 
         console.log("saveResult called — score:", latestScore, "index:", latestIndex, "rpChange:", rpChange, "result:", result);

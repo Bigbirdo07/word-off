@@ -89,8 +89,8 @@ class Game {
         const rpChanges = {};
         playerResults.forEach(p => {
             if (this.players.length === 1) {
-                // Single player (sprint) — small practice reward
-                rpChanges[p.socketId] = 5;
+                // Single player (sprint) — no RP, only ranked gives RP
+                rpChanges[p.socketId] = 0;
             } else if (isDraw) {
                 rpChanges[p.socketId] = 5;
             } else if (p.socketId === winner) {
