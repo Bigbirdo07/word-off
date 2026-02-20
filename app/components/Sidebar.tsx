@@ -24,6 +24,14 @@ export function Sidebar({ mode, setMode, view, setView, player, onOpenAuth, onLo
             <div className="sidebar-card">
                 <p className="label">Game Modes</p>
                 <button
+                    className={`mode-button ${mode === "daily" ? "is-active" : ""}`}
+                    type="button"
+                    onClick={() => { setMode("daily"); setView("daily"); }}
+                >
+                    <span className="mode-title">Daily Challenge</span>
+                    <span className="mode-subtitle">Same 3 words for everyone</span>
+                </button>
+                <button
                     className={`mode-button ${mode === "sprint" && view === "home" ? "is-active" : ""}`}
                     type="button"
                     onClick={() => { setMode("sprint"); setView("home"); }}
@@ -38,14 +46,6 @@ export function Sidebar({ mode, setMode, view, setView, player, onOpenAuth, onLo
                 >
                     <span className="mode-title">Ranked Duels</span>
                     <span className="mode-subtitle">Head-to-head online</span>
-                </button>
-                <button
-                    className={`mode-button ${mode === "daily" ? "is-active" : ""}`}
-                    type="button"
-                    onClick={() => { setMode("daily"); setView("daily"); }}
-                >
-                    <span className="mode-title">Daily Challenge</span>
-                    <span className="mode-subtitle">Same 3 words for everyone</span>
                 </button>
                 <button
                     className={`mode-button ${mode === "endless" ? "is-active" : ""}`}
