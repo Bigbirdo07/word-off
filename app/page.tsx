@@ -289,7 +289,7 @@ export default function Home() {
                       id="lobby-code"
                       className="lobby-input"
                       type="text"
-                      placeholder="Enter code"
+                      placeholder="6-character code"
                       maxLength={6}
                       value={lobbyInput}
                       onChange={(e) => setLobbyInput(e.target.value.toUpperCase())}
