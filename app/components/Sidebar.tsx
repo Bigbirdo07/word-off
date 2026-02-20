@@ -24,9 +24,9 @@ export function Sidebar({ mode, setMode, view, setView, player, onOpenAuth, onLo
             <div className="sidebar-card">
                 <p className="label">Game Modes</p>
                 <button
-                    className={`mode-button ${mode === "daily" ? "is-active" : ""}`}
+                    className={`mode-button ${mode === "daily" && view === "home" ? "is-active" : ""}`}
                     type="button"
-                    onClick={() => { setMode("daily"); setView("daily"); }}
+                    onClick={() => { setMode("daily"); setView("home"); }}
                 >
                     <span className="mode-title">Daily Challenge</span>
                     <span className="mode-subtitle">Same 3 words for everyone</span>

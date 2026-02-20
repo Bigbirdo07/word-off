@@ -17,7 +17,7 @@ type Mode = "sprint" | "ranked" | "daily" | "endless";
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>("daily");
-  const [view, setView] = useState<"home" | "daily" | "leaderboard" | "profile">("daily");
+  const [view, setView] = useState<"home" | "daily" | "leaderboard" | "profile">("home");
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
   const { player, login, register, logout, refreshPlayer } = useAuth();
 
