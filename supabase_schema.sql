@@ -3,7 +3,7 @@ create table if not exists players (
   id uuid default gen_random_uuid() primary key,
   username text unique not null,
   secret_code text not null, -- Simple password for this prototype
-  rank_tier text default 'Pencil I',
+  rank_tier text default 'Lead III',
   rank_points int default 0,
   current_streak INTEGER DEFAULT 0,
   words_solved INTEGER DEFAULT 0,
