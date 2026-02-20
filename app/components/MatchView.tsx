@@ -321,6 +321,21 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
         }
     };
 
+    // ── Give Up / Concede ──
+    const handleGiveUp = () => {
+        if (gameState !== "playing") return;
+        const confirm = window.confirm("Are you sure you want to give up? You will instantly lose this match.");
+        if (confirm) {
+            if (socket && roomIdRef.current) {
+                socket.emit("give_up", { roomId: roomIdRef.current });
+            } else {
+                // Offline handle
+                setScore(-1);
+                setGameState("finished");
+            }
+        }
+    };
+
     // ── Result display ──
     const getResultDisplay = () => {
         if (!matchResult) {
@@ -369,6 +384,25 @@ export function MatchView({ socket, matchData, onExit, player, onUpdatePlayer }:
                             <span className="label">{opponentName}</span>
                             <span className="value">{opponentScore}</span>
                         </div>
+                    )}
+                    {gameState === "playing" && (
+                        <button
+                            type="button"
+                            onClick={handleGiveUp}
+                            style={{
+                                background: "transparent",
+                                color: "var(--accent-deep)",
+                                border: "1px solid var(--accent-deep)",
+                                borderRadius: "30px",
+                                padding: "4px 16px",
+                                fontSize: "14px",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                marginLeft: "8px",
+                            }}
+                        >
+                            Give Up
+                        </button>
                     )}
                 </div>
             </header>

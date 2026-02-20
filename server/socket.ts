@@ -74,12 +74,14 @@ function setupSocket(io) {
                 io.in(p1Socket).socketsJoin(match.id);
                 io.in(p2Socket).socketsJoin(match.id);
 
-                // Send shared match data to both players (no functions — only serializable data)
-                io.to(match.id).emit('match_start', {
+                // Send shared match data explicitly to both sockets to avoid room join delay race condition
+                const startData = {
                     roomId: match.id,
                     words: words,
                     startTime: Date.now() // Start immediately
-                });
+                };
+                io.to(p1Socket).emit('match_start', startData);
+                io.to(p2Socket).emit('match_start', startData);
 
                 // Send per-player opponent info
                 io.to(p1Socket).emit('match_init', {
@@ -156,12 +158,14 @@ function setupSocket(io) {
             io.in(p1Socket).socketsJoin(roomId);
             io.in(p2Socket).socketsJoin(roomId);
 
-            // Send shared match data
-            io.to(roomId).emit('match_start', {
+            // Send shared match data explicitly
+            const startData = {
                 roomId: roomId,
                 words: words,
                 startTime: Date.now()
-            });
+            };
+            io.to(p1Socket).emit('match_start', startData);
+            io.to(p2Socket).emit('match_start', startData);
 
             // Send per-player opponent info
             io.to(p1Socket).emit('match_init', {
@@ -262,6 +266,17 @@ function setupSocket(io) {
                 // All players done, end game immediately
                 endGame(io, roomId);
             }
+        });
+
+        // --- Player concedes explicitly ---
+        socket.on('give_up', ({ roomId }) => {
+            const game = games[roomId];
+            if (!game) return;
+            if (game.isFinished()) return;
+
+            console.log(`Player ${socket.id} gave up in game ${roomId}`);
+            game.concede(socket.id);
+            endGame(io, roomId);
         });
 
         socket.on('disconnect', () => {

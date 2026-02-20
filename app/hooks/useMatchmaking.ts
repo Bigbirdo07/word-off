@@ -38,8 +38,8 @@ export function useMatchmaking(player: Player | null) {
         newSocket.on("match_start", (data: any) => {
             console.log("Match Started!", data);
             setMatchData((prev: any) => prev ? { ...prev, ...data } : data);
-            // If we're still idle (sprint mode), go straight to playing
-            setStatus((prevStatus) => prevStatus === "idle" ? "playing" : prevStatus);
+            // If we're still idle (sprint mode) or in lobby, go straight to playing
+            setStatus((prevStatus) => (prevStatus === "idle" || prevStatus === "lobby_waiting") ? "playing" : prevStatus);
         });
 
         // --- Lobby events ---

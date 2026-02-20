@@ -58,6 +58,13 @@ class Game {
         return allDone;
     }
 
+    concede(socketId) {
+        // Set their score to -1 so the sorting logic explicitly places them at the bottom
+        // and they definitely register as losing against anyone with 0+ points.
+        this.scores[socketId] = -1;
+        this.gameOver = true;
+    }
+
     endGame() {
         this.gameOver = true;
     }
