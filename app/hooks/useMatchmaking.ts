@@ -4,12 +4,14 @@ import { useState, useEffect } from "react";
 import io from "socket.io-client";
 import { Player } from "./useAuth";
 
-export type MatchStatus = "idle" | "searching" | "found" | "playing";
+export type MatchStatus = "idle" | "searching" | "found" | "playing" | "lobby_waiting";
 
 export function useMatchmaking(player: Player | null) {
     const [status, setStatus] = useState<MatchStatus>("idle");
     const [matchData, setMatchData] = useState<any>(null);
     const [socket, setSocket] = useState<any>(null);
+    const [lobbyCode, setLobbyCode] = useState<string | null>(null);
+    const [lobbyError, setLobbyError] = useState<string | null>(null);
 
     useEffect(() => {
         // Initialize socket connection
@@ -40,6 +42,19 @@ export function useMatchmaking(player: Player | null) {
             setStatus((prevStatus) => prevStatus === "idle" ? "playing" : prevStatus);
         });
 
+        // --- Lobby events ---
+        newSocket.on("lobby_created", (data: any) => {
+            console.log("Lobby created:", data.code);
+            setLobbyCode(data.code);
+            setLobbyError(null);
+            setStatus("lobby_waiting");
+        });
+
+        newSocket.on("lobby_error", (data: any) => {
+            console.log("Lobby error:", data.message);
+            setLobbyError(data.message);
+        });
+
         return () => {
             newSocket.disconnect();
         };
@@ -68,6 +83,26 @@ export function useMatchmaking(player: Player | null) {
         socket.emit("get_daily");
     };
 
+    // --- Lobby functions ---
+    const createLobby = () => {
+        if (!player || !socket) return;
+        setLobbyError(null);
+        socket.emit("create_lobby", player);
+    };
+
+    const joinLobby = (code: string) => {
+        if (!player || !socket) return;
+        setLobbyError(null);
+        socket.emit("join_lobby", { code: code.toUpperCase(), player });
+    };
+
+    const cancelLobby = () => {
+        if (!socket) return;
+        socket.emit("cancel_lobby");
+        setLobbyCode(null);
+        setStatus("idle");
+    };
+
     return {
         status,
         matchData,
@@ -75,6 +110,11 @@ export function useMatchmaking(player: Player | null) {
         leaveQueue,
         startSprint,
         getDaily,
+        createLobby,
+        joinLobby,
+        cancelLobby,
+        lobbyCode,
+        lobbyError,
         socket
     };
 }

@@ -1,10 +1,11 @@
 // @ts-nocheck
 class Game {
-    constructor(id, players, words, duration = 60) {
+    constructor(id, players, words, duration = 60, isPrivate = false) {
         this.id = id;
         this.players = players; // array of { socketId, player }
         this.words = words; // array of WordEntry
         this.duration = duration; // seconds
+        this.isPrivate = isPrivate; // private lobbies give 0 RP
         this.startTime = Date.now();
         this.endTime = this.startTime + (duration * 1000);
         this.scores = {}; // socketId -> score
@@ -88,8 +89,8 @@ class Game {
         // Calculate RP changes
         const rpChanges = {};
         playerResults.forEach(p => {
-            if (this.players.length === 1) {
-                // Single player (sprint) — no RP, only ranked gives RP
+            if (this.players.length === 1 || this.isPrivate) {
+                // Single player (sprint) or private lobby — no RP
                 rpChanges[p.socketId] = 0;
             } else if (isDraw) {
                 rpChanges[p.socketId] = 5;

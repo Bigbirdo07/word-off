@@ -22,12 +22,18 @@ export default function Home() {
   const { player, login, register, logout, refreshPlayer } = useAuth();
 
   // Matchmaking Hook
-  const { status: matchStatus, matchData: socketMatchData, joinQueue, leaveQueue, socket } = useMatchmaking(player);
+  const {
+    status: matchStatus, matchData: socketMatchData,
+    joinQueue, leaveQueue,
+    createLobby, joinLobby, cancelLobby, lobbyCode, lobbyError,
+    socket
+  } = useMatchmaking(player);
 
   // Local Match State
   const [localMatchData, setLocalMatchData] = useState<any>(null);
   const [isLocalPlaying, setIsLocalPlaying] = useState(false);
   const [isEndlessPlaying, setIsEndlessPlaying] = useState(false);
+  const [lobbyInput, setLobbyInput] = useState("");
 
   const startLocalSprint = () => {
     // Pick 20 random words
@@ -250,26 +256,73 @@ export default function Home() {
                 <p className="label">Private Lobby</p>
                 <p className="ranked-title">Play with friends</p>
                 <p className="ranked-subtitle">
-                  Create or join with a lobby code.
+                  {matchStatus === "lobby_waiting"
+                    ? "Share this code with your friend:"
+                    : "Create or join with a lobby code. No RP awarded."}
                 </p>
               </div>
-              <div className="lobby-row">
-                <input
-                  id="lobby-code"
-                  className="lobby-input"
-                  type="text"
-                  placeholder="Enter code"
-                  maxLength={6}
-                />
-                <button id="lobby-join" className="ghost" type="button">
-                  Join
-                </button>
-              </div>
-              <div className="ranked-actions">
-                <button id="lobby-create" className="primary" type="button">
-                  Create Lobby
-                </button>
-              </div>
+
+              {matchStatus === "lobby_waiting" && lobbyCode ? (
+                <>
+                  <div style={{ textAlign: "center", margin: "16px 0" }}>
+                    <span style={{
+                      fontSize: "32px", fontWeight: "bold", letterSpacing: "8px",
+                      padding: "12px 24px", background: "var(--surface)",
+                      borderRadius: "12px", border: "2px dashed var(--accent)"
+                    }}>
+                      {lobbyCode}
+                    </span>
+                    <p style={{ fontSize: "13px", opacity: 0.6, marginTop: "8px" }}>
+                      Waiting for opponent to join...
+                    </p>
+                  </div>
+                  <div className="ranked-actions">
+                    <button className="ghost" type="button" onClick={cancelLobby}>
+                      Cancel Lobby
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="lobby-row">
+                    <input
+                      id="lobby-code"
+                      className="lobby-input"
+                      type="text"
+                      placeholder="Enter code"
+                      maxLength={6}
+                      value={lobbyInput}
+                      onChange={(e) => setLobbyInput(e.target.value.toUpperCase())}
+                    />
+                    <button
+                      id="lobby-join" className="ghost" type="button"
+                      onClick={() => {
+                        if (!player) { setAuthModalOpen(true); return; }
+                        if (lobbyInput.trim()) joinLobby(lobbyInput.trim());
+                      }}
+                      disabled={!lobbyInput.trim()}
+                    >
+                      Join
+                    </button>
+                  </div>
+                  {lobbyError && (
+                    <p style={{ color: "var(--accent-deep)", fontSize: "13px", textAlign: "center", margin: "8px 0" }}>
+                      {lobbyError}
+                    </p>
+                  )}
+                  <div className="ranked-actions">
+                    <button
+                      id="lobby-create" className="primary" type="button"
+                      onClick={() => {
+                        if (!player) { setAuthModalOpen(true); return; }
+                        createLobby();
+                      }}
+                    >
+                      Create Lobby
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </section>
         )}

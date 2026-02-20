@@ -8,6 +8,14 @@ const dictionary = Dictionary.getInstance();
 const matchmaker = new Matchmaker();
 const games = {}; // roomId -> Game
 const gameTimers = {}; // roomId -> setTimeout handle
+const lobbies = {}; // lobbyCode -> { host: { socketId, player }, code }
+
+function generateLobbyCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+}
 
 function endGame(io, roomId) {
     const game = games[roomId];
@@ -102,6 +110,92 @@ function setupSocket(io) {
             socket.emit('queue_update', { status: 'idle' });
         });
 
+        // --- Private Lobby ---
+        socket.on('create_lobby', (playerData) => {
+            // Generate unique code
+            let code = generateLobbyCode();
+            while (lobbies[code]) code = generateLobbyCode();
+
+            lobbies[code] = {
+                host: { socketId: socket.id, player: playerData },
+                code: code
+            };
+
+            console.log(`Lobby created: ${code} by ${playerData.username}`);
+            socket.emit('lobby_created', { code });
+        });
+
+        socket.on('join_lobby', ({ code, player: joinerData }) => {
+            const lobby = lobbies[code.toUpperCase()];
+
+            if (!lobby) {
+                socket.emit('lobby_error', { message: 'Lobby not found. Check the code and try again.' });
+                return;
+            }
+
+            if (lobby.host.socketId === socket.id) {
+                socket.emit('lobby_error', { message: 'You cannot join your own lobby.' });
+                return;
+            }
+
+            // Match found! Start game like ranked but private
+            const roomId = `lobby_${code}`;
+            const words = dictionary.getRandomWords(110);
+            const players = [
+                lobby.host,
+                { socketId: socket.id, player: joinerData }
+            ];
+
+            const game = new Game(roomId, players, words, 60, true); // isPrivate = true
+            games[roomId] = game;
+
+            const p1Socket = lobby.host.socketId;
+            const p2Socket = socket.id;
+
+            // Join room
+            io.in(p1Socket).socketsJoin(roomId);
+            io.in(p2Socket).socketsJoin(roomId);
+
+            // Send shared match data
+            io.to(roomId).emit('match_start', {
+                roomId: roomId,
+                words: words,
+                startTime: Date.now()
+            });
+
+            // Send per-player opponent info
+            io.to(p1Socket).emit('match_init', {
+                roomId: roomId,
+                opponent: joinerData,
+                startTime: Date.now()
+            });
+            io.to(p2Socket).emit('match_init', {
+                roomId: roomId,
+                opponent: lobby.host.player,
+                startTime: Date.now()
+            });
+
+            // Server-side game timer
+            gameTimers[roomId] = setTimeout(() => {
+                endGame(io, roomId);
+            }, 62000);
+
+            console.log(`Lobby ${code} started: ${lobby.host.player.username} vs ${joinerData.username}`);
+
+            // Clean up lobby
+            delete lobbies[code];
+        });
+
+        socket.on('cancel_lobby', () => {
+            for (const code in lobbies) {
+                if (lobbies[code].host.socketId === socket.id) {
+                    delete lobbies[code];
+                    console.log(`Lobby cancelled: ${code}`);
+                    break;
+                }
+            }
+        });
+
         // --- Sprint Mode (Single Player) ---
         socket.on('start_sprint', (playerData) => {
             const roomId = `sprint_${socket.id}`;
@@ -173,6 +267,14 @@ function setupSocket(io) {
         socket.on('disconnect', () => {
             console.log('User disconnected:', socket.id);
             matchmaker.removePlayer(socket.id);
+
+            // Clean up any lobbies they hosted
+            for (const code in lobbies) {
+                if (lobbies[code].host.socketId === socket.id) {
+                    delete lobbies[code];
+                    console.log(`Lobby ${code} removed (host disconnected)`);
+                }
+            }
 
             // Handle active game forfeit
             for (const roomId in games) {
