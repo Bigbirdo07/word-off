@@ -31,17 +31,26 @@ export function DailyView({ socket, onExit, player, onUpdatePlayer }: DailyViewP
     useEffect(() => {
         if (!socket) return;
 
-        socket.on("daily_puzzle", (data: any) => {
+        const handleDailyPuzzle = (data: any) => {
             console.log("Daily Data:", data);
             setWords(data.words);
             setDate(data.date);
-        });
+        };
 
-        // Request data on mount
+        const handleConnect = () => {
+            console.log("Socket reconnected, requesting daily puzzle...");
+            socket.emit("get_daily");
+        };
+
+        socket.on("daily_puzzle", handleDailyPuzzle);
+        socket.on("connect", handleConnect);
+
+        // Request data on mount (buffered if connecting, or sent if already connected)
         socket.emit("get_daily");
 
         return () => {
-            socket.off("daily_puzzle");
+            socket.off("daily_puzzle", handleDailyPuzzle);
+            socket.off("connect", handleConnect);
         };
     }, [socket]);
 
@@ -159,7 +168,16 @@ export function DailyView({ socket, onExit, player, onUpdatePlayer }: DailyViewP
         }
     };
 
-    if (words.length === 0) return <div className="card"><h3>Loading Daily Challenge...</h3></div>;
+    if (words.length === 0) {
+        return (
+            <div className="card" style={{ textAlign: "center", padding: "40px" }}>
+                <h3 style={{ marginBottom: "12px" }}>Loading Daily Challenge...</h3>
+                <p style={{ opacity: 0.6, fontSize: "14px" }}>
+                    If the server is waking up from sleep, this may take up to 50 seconds. Please wait!
+                </p>
+            </div>
+        );
+    }
 
     const correctCount = results.filter(r => r.status === "correct").length;
 
