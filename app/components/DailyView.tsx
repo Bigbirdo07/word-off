@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Player } from "../hooks/useAuth";
+import { WORDS } from "../data/words";
 
 interface DailyViewProps {
     socket: any;
@@ -29,30 +30,41 @@ export function DailyView({ socket, onExit, player, onUpdatePlayer }: DailyViewP
     const [results, setResults] = useState<DailyResult[]>([]);
 
     useEffect(() => {
-        if (!socket) return;
+        const dateStr = new Date().toISOString().split('T')[0];
 
-        const handleDailyPuzzle = (data: any) => {
-            console.log("Daily Data:", data);
-            setWords(data.words);
-            setDate(data.date);
+        // Seeded RNG based on the date string
+        let seed = 0;
+        for (let i = 0; i < dateStr.length; i++) {
+            seed = ((seed << 5) - seed) + dateStr.charCodeAt(i);
+            seed |= 0;
+        }
+
+        const m = 0x80000000;
+        const a = 1103515245;
+        const c = 12345;
+        let state = Math.abs(seed);
+
+        const rng = () => {
+            state = (a * state + c) % m;
+            return state / (m - 1);
         };
 
-        const handleConnect = () => {
-            console.log("Socket reconnected, requesting daily puzzle...");
-            socket.emit("get_daily");
-        };
+        const result = new Set<any>();
+        let attempts = 0;
+        const count = 3;
 
-        socket.on("daily_puzzle", handleDailyPuzzle);
-        socket.on("connect", handleConnect);
+        while (result.size < count && attempts < count * 5) {
+            const index = Math.floor(rng() * WORDS.length);
+            const word = WORDS[index];
+            if (word && word.word) {
+                result.add(word);
+            }
+            attempts++;
+        }
 
-        // Request data on mount (buffered if connecting, or sent if already connected)
-        socket.emit("get_daily");
-
-        return () => {
-            socket.off("daily_puzzle", handleDailyPuzzle);
-            socket.off("connect", handleConnect);
-        };
-    }, [socket]);
+        setWords(Array.from(result));
+        setDate(dateStr);
+    }, []);
 
     const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set());
 
@@ -172,9 +184,6 @@ export function DailyView({ socket, onExit, player, onUpdatePlayer }: DailyViewP
         return (
             <div className="card" style={{ textAlign: "center", padding: "40px" }}>
                 <h3 style={{ marginBottom: "12px" }}>Loading Daily Challenge...</h3>
-                <p style={{ opacity: 0.6, fontSize: "14px" }}>
-                    If the server is waking up from sleep, this may take up to 50 seconds. Please wait!
-                </p>
             </div>
         );
     }
